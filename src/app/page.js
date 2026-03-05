@@ -15,41 +15,68 @@ const getFullUrl = (path) => {
   return encodeURI(`${BASE_URL}${cleanPath}`);
 };
 
-// ─── Inner component that uses useSearchParams ────────────────────────────────
 function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [newsData, setNewsData] = useState([]);
-  const [liveVideos, setLiveVideos] = useState([]);
   const [slidingVideos, setSlidingVideos] = useState([]);
   const [loading, setLoading] = useState(true);
+  // -------------------------------Ads-------------------------------
+  const [topBannerAd, setTopBannerAd] = useState(null);
+  const [rightTopAd, setRightTopAd] = useState(null);
+  const [rightBottomAd, setRightBottomAd] = useState(null);
 
-  // ✅ Read search + category from URL params
   const searchQuery = searchParams.get("search") || "";
   const categoryQuery = searchParams.get("category") || "";
+  const citiesQuery = searchParams.get("cities") || "";
 
   useEffect(() => {
-    if (searchQuery || categoryQuery) {
+    const fetchAds = async () => {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+        const [topRes, rightTopRes, rightBottomRes] = await Promise.all([
+          fetch(`${baseUrl}/ads/TOP_BANNER`),
+          fetch(`${baseUrl}/ads/RIGHT_TOP`),
+          fetch(`${baseUrl}/ads/RIGHT_BOTTOM`),
+        ]);
+
+        const [topData, rightTopData, rightBottomData] = await Promise.all([
+          topRes.json(),
+          rightTopRes.json(),
+          rightBottomRes.json(),
+        ]);
+
+        // Show only first ad if multiple
+        setTopBannerAd(Array.isArray(topData) ? topData[0] : null);
+        setRightTopAd(Array.isArray(rightTopData) ? rightTopData[0] : null);
+        setRightBottomAd(
+          Array.isArray(rightBottomData) ? rightBottomData[0] : null,
+        );
+      } catch (error) {
+        console.error("Error fetching ads:", error);
+      }
+    };
+
+    fetchAds();
+  }, []);
+
+  useEffect(() => {
+    if (citiesQuery) {
+      fetchNewsByCities(citiesQuery);
+    } else if (searchQuery || categoryQuery) {
       fetchFilteredNews(searchQuery, categoryQuery);
     } else {
       fetchAllData();
     }
-  }, [searchQuery, categoryQuery]);
+  }, [searchQuery, categoryQuery, citiesQuery]);
 
-  // ─── Fetch ALL homepage data (default view) ──────────────────────────────
   const fetchAllData = async () => {
     try {
       setLoading(true);
-
       const news = await getHomePageNews();
       setNewsData(Array.isArray(news) ? news : []);
-
-      const liveRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/homepage/videos`,
-      );
-      const live = await liveRes.json();
-      setLiveVideos(Array.isArray(live) ? live.slice(0, 10) : []);
 
       const slidingRes = await fetch(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/homepage/videos/sliding`,
@@ -59,38 +86,66 @@ function HomeContent() {
     } catch (error) {
       console.error("Error fetching homepage data:", error);
       setNewsData([]);
-      setLiveVideos([]);
       setSlidingVideos([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // ─── Fetch filtered/searched news from backend ────────────────────────────
-  const fetchFilteredNews = async (query, category) => {
+  const fetchNewsByCities = async (citiesString) => {
     try {
       setLoading(true);
 
+      const cityArray = citiesString.split(",");
+
       const params = new URLSearchParams();
-      params.set("page", "0");
-      params.set("size", "20");
+      cityArray.forEach((city) => {
+        params.append("cities", city);
+      });
 
-      // ✅ Send keyword param for Gujarati / English text search
-      if (query) {
-        params.set("keyword", query);
-      }
+      const url = `${process.env.NEXT_PUBLIC_API_BASE_URL}/homepage/by-cities?${params.toString()}`;
 
-      // ✅ Send category param for category filter
-      if (category && category !== "All") {
-        params.set("category", category);
-      }
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch city news");
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/searchEngine/filter?${params.toString()}`,
-      );
       const data = await res.json();
+      setNewsData(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("City filter error:", error);
+      setNewsData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      // Handle both paginated PageResponse and plain array
+  const fetchFilteredNews = async (query, category) => {
+    try {
+      setLoading(true);
+      let url = "";
+
+      if (category && !query) {
+        url = `${process.env.NEXT_PUBLIC_API_BASE_URL}/homepage/by-category?category=${encodeURIComponent(
+          category,
+        )}`;
+      } else {
+        const params = new URLSearchParams();
+        params.set("page", "0");
+        params.set("size", "20");
+        if (query) params.set("keyword", query);
+        if (category) params.set("category", category);
+
+        url = `${process.env.NEXT_PUBLIC_API_BASE_URL}/searchEngine/filter?${params.toString()}`;
+      }
+
+      if (!url) {
+        setNewsData([]);
+        return;
+      }
+
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`API Error: ${res.status}`);
+
+      const data = await res.json();
       const items = Array.isArray(data)
         ? data
         : Array.isArray(data?.content)
@@ -98,15 +153,6 @@ function HomeContent() {
           : [];
 
       setNewsData(items);
-
-      // Keep live videos visible during search
-      if (liveVideos.length === 0) {
-        const liveRes = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/homepage/videos`,
-        );
-        const live = await liveRes.json();
-        setLiveVideos(Array.isArray(live) ? live.slice(0, 10) : []);
-      }
     } catch (error) {
       console.error("Error fetching filtered news:", error);
       setNewsData([]);
@@ -115,29 +161,26 @@ function HomeContent() {
     }
   };
 
-  const clearSearch = () => {
-    router.push("/");
-  };
+  const clearSearch = () => router.push("/");
 
   const storyNews = newsData.filter((news) => news?.type !== "DIGITAL");
   const digitalNews = newsData.filter((news) => news?.type === "DIGITAL");
-
-  const isSearching = !!(searchQuery || categoryQuery);
+  const isSearching = !!(searchQuery || categoryQuery || citiesQuery);
 
   return (
     <div className="min-h-screen bg-gray-100 overflow-x-hidden">
-      <div className="w-full px-4 py-6">
-        {/* ✅ Active Search / Category Banner */}
+      <div className="w-full px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
+        {/* Search Banner */}
         {isSearching && (
-          <div className="mb-4 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-5 py-3">
-            <div className="flex-1">
+          <div className="mb-4 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+            <div className="flex-1 min-w-0">
               {searchQuery && (
-                <p className="text-sm text-blue-800">
+                <p className="text-sm text-blue-800 truncate">
                   શોધ પરિણામ: <span className="font-bold">"{searchQuery}"</span>
                 </p>
               )}
               {categoryQuery && (
-                <p className="text-sm text-blue-800">
+                <p className="text-sm text-blue-800 truncate">
                   કેટેગરી: <span className="font-bold">{categoryQuery}</span>
                 </p>
               )}
@@ -149,64 +192,65 @@ function HomeContent() {
             </div>
             <button
               onClick={clearSearch}
-              className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 transition font-medium"
+              className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 transition font-medium shrink-0"
             >
               <XMarkIcon className="w-4 h-4" />
-              બધા સમાચાર
+              <span className="hidden sm:inline">બધા સમાચાર</span>
             </button>
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* ================= LEFT SIDE — Live News (20%) ================= */}
-          <div className="lg:col-span-2 bg-white rounded-2xl shadow-md p-4 h-fit self-start">
-            <h2 className="text-lg font-bold text-red-600 mb-4">Live News</h2>
-            <div className="space-y-4">
-              {liveVideos.slice(0, 10).map((video) => {
-                const videoUrl = getFullUrl(video?.mediaUrls?.[0]);
-                return (
-                  <div
-                    key={video.id}
-                    className="bg-gray-50 rounded-xl overflow-hidden shadow hover:shadow-lg transition"
-                  >
-                    <video
-                      src={videoUrl}
-                      className="w-full h-32 object-cover"
-                      autoPlay
-                      muted
-                      loop
-                      playsInline
-                      controls={false}
-                    />
-                  </div>
-                );
-              })}
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 ">
+          {/* LEFT: YouTube Live */}
+          <div className="hidden lg:block lg:col-span-2 bg-white rounded-2xl shadow-md p-4 h-fit self-start sticky top-4">
+            <h2 className="text-lg font-bold text-red-600 mb-4">
+              🔴 Live News
+            </h2>
+
+            <div className="rounded-xl overflow-hidden shadow">
+              <iframe
+                src="https://www.youtube.com/embed/c5gB1nv4QTc"
+                title="Live News"
+                className="w-full h-64 rounded-xl"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
             </div>
           </div>
 
-          {/* ================= CENTER (60%) ================= */}
-          <div className="lg:col-span-8 space-y-6">
+          {/* CENTER */}
+          <div className="lg:col-span-8 space-y-4 sm:space-y-6">
             {/* Top Ad */}
-            <div className="bg-gray-100 rounded-xl shadow h-60 flex items-center justify-center overflow-hidden">
-              Ads 1
-            </div>
+            {topBannerAd && (
+              <a
+                href={topBannerAd.redirectUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:block"
+              >
+                <img
+                  src={getFullUrl(topBannerAd.imageUrl)}
+                  alt={topBannerAd.title}
+                  className="rounded-xl shadow sm:h-52 lg:h-60 w-full object-cover"
+                />
+              </a>
+            )}
 
-            {/* Sliding Featured Videos — hidden during search */}
+            {/* Sliding Videos */}
             {!isSearching && slidingVideos.length > 0 && (
-              <div className="bg-white rounded-xl shadow p-4">
-                <div
-                  className="flex gap-4 overflow-x-auto
-                    [-ms-overflow-style:none]
-                    [scrollbar-width:none]
-                    [&::-webkit-scrollbar]:hidden"
-                >
+              <div className="bg-white rounded-xl shadow p-3 sm:p-4">
+                <div className="flex gap-3 sm:gap-4 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {slidingVideos.map((video) => {
                     const videoUrl = getFullUrl(video?.mediaUrls?.[0]);
                     return (
-                      <div key={video.id} className="min-w-62.5 shrink-0">
+                      <div
+                        key={video.id}
+                        className="min-w-45 sm:min-w-55 lg:min-w-62.5 shrink-0"
+                      >
                         <video
                           src={videoUrl}
-                          className="w-full h-32 object-cover"
+                          className="w-full h-28 sm:h-32 object-cover rounded-lg"
                           autoPlay
                           muted
                           loop
@@ -220,73 +264,33 @@ function HomeContent() {
               </div>
             )}
 
-            {/* ✅ Loading Spinner */}
+            {/* Loading */}
             {loading && (
-              <div className="flex items-center justify-center py-20 text-gray-400">
-                <svg
-                  className="animate-spin w-6 h-6 mr-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8H4z"
-                  />
-                </svg>
-                સમાચાર લોડ થઈ રહ્યા છે...
+              <div className="flex items-center justify-center py-16 text-gray-400">
+                Loading...
               </div>
             )}
 
-            {/* ✅ No Results */}
-            {!loading && isSearching && newsData.length === 0 && (
-              <div className="bg-white rounded-xl shadow p-10 text-center text-gray-400">
-                <p className="text-lg font-semibold">કોઈ સમાચાર મળ્યા નહીં</p>
-                <p className="text-sm mt-1">
-                  બીજો શબ્દ અજમાવો અથવા{" "}
-                  <button
-                    onClick={clearSearch}
-                    className="text-blue-500 underline"
-                  >
-                    બધા સમાચાર જુઓ
-                  </button>
-                </p>
-              </div>
-            )}
-
-            {/* ✅ News Grid */}
+            {/* News Grid */}
             {!loading && newsData.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* ── STORY NEWS ─────────────────────────────── */}
-                <div className="space-x-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
+                {/* STORY NEWS */}
+                <div className="space-x-3 ">
                   {storyNews.map((story) => (
-                    <Link
-                      key={story.id}
-                      href={`/news/${story.id}?data=${encodeURIComponent(
-                        JSON.stringify(story),
-                      )}`}
-                    >
-                      <div className="flex gap-4 cursor-pointer hover:bg-gray-50 p-3 rounded-lg transition border-b">
-                        <div className="flex-1">
-                          <h2 className="font-semibold text-base line-clamp-2">
+                    <Link key={story.id} href={`/news/${story.id}`}>
+                      <div className="flex gap-3 cursor-pointer hover:bg-gray-50 p-3 rounded-lg border-b">
+                        <div className="flex-1 min-w-0">
+                          <h2 className="font-semibold text-sm sm:text-base line-clamp-2">
                             {story.title}
                           </h2>
-                          <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                          <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2">
                             {story.shortDescription}
                           </p>
                         </div>
                         {story?.mediaUrls?.[0] && (
                           <img
                             src={getFullUrl(story.mediaUrls[0])}
-                            className="w-24 h-20 object-cover rounded-lg"
+                            className="w-20 h-16 sm:w-24 sm:h-20 object-cover rounded-lg shrink-0"
                             alt={story.title}
                           />
                         )}
@@ -295,7 +299,7 @@ function HomeContent() {
                   ))}
                 </div>
 
-                {/* ── DIGITAL NEWS ───────────────────────────── */}
+                {/* DIGITAL NEWS */}
                 <div className="space-x-3">
                   {digitalNews.map((digital) => {
                     const videoSrc = digital.finalVideoUrl
@@ -304,21 +308,14 @@ function HomeContent() {
                         ? getFullUrl(digital.mediaUrls[0])
                         : null;
 
-                    const isProcessing = !digital.finalVideoUrl;
-
                     return (
-                      <Link
-                        key={digital.id}
-                        href={`/news/${digital.id}?data=${encodeURIComponent(
-                          JSON.stringify(digital),
-                        )}`}
-                      >
-                        <div className="flex gap-4 cursor-pointer hover:bg-gray-50 p-3 rounded-lg transition border-b">
-                          <div className="flex-1">
-                            <h2 className="font-semibold text-base line-clamp-2">
+                      <Link key={digital.id} href={`/news/${digital.id}`}>
+                        <div className="flex gap-3 cursor-pointer hover:bg-gray-50 p-3 rounded-lg border-b">
+                          <div className="flex-1 min-w-0">
+                            <h2 className="font-semibold text-sm sm:text-base line-clamp-2">
                               {digital.title}
                             </h2>
-                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                            <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2">
                               {digital.shortDescription}
                             </p>
                           </div>
@@ -326,18 +323,12 @@ function HomeContent() {
                             <div className="relative shrink-0">
                               <video
                                 src={videoSrc}
-                                className="w-24 h-20 object-cover rounded-lg"
+                                className="w-20 h-16 sm:w-24 sm:h-20 object-cover rounded-lg"
                                 muted
-                                preload="metadata"
                               />
                               <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-lg">
                                 <PlayCircleIcon className="w-6 h-6 text-white" />
                               </div>
-                              {isProcessing && (
-                                <div className="absolute bottom-1 left-1 right-1 bg-orange-500/90 text-white text-[9px] font-bold text-center rounded px-1 py-0.5 leading-tight">
-                                  Processing...
-                                </div>
-                              )}
                             </div>
                           )}
                         </div>
@@ -349,30 +340,48 @@ function HomeContent() {
             )}
           </div>
 
-          {/* ================= RIGHT SIDE — Ads (20%) ================= */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-gray-100 rounded-xl shadow h-60 overflow-hidden">
-              Ads 2
-            </div>
-            <div className="bg-gray-100 rounded-xl shadow h-60 overflow-hidden">
-              Ads 3
-            </div>
-            <div className="bg-gray-100 rounded-xl shadow h-60 overflow-hidden">
-              Ads 4
-            </div>
+          {/* RIGHT ADS */}
+          <div className="hidden lg:flex lg:col-span-2 flex-col gap-6">
+            {rightTopAd && (
+              <a
+                href={rightTopAd.redirectUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <img
+                  src={getFullUrl(rightTopAd.imageUrl)}
+                  alt={rightTopAd.title}
+                  className="rounded-xl shadow h-60 w-full object-cover"
+                />
+              </a>
+            )}
+
+            {rightBottomAd && (
+              <a
+                href={rightBottomAd.redirectUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <img
+                  src={getFullUrl(rightBottomAd.imageUrl)}
+                  alt={rightBottomAd.title}
+                  className="rounded-xl shadow h-60 w-full object-cover"
+                />
+              </a>
+            )}
           </div>
         </div>
       </div>
     </div>
+    
   );
 }
 
-// ✅ Wrap in Suspense — required by Next.js App Router for useSearchParams
 export default function Home() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-gray-100 flex items-center justify-center text-gray-400">
+        <div className="min-h-screen bg-gray-100 flex items-center justify-center text-gray-400 text-sm">
           Loading...
         </div>
       }
