@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   GlobeAltIcon,
   TrophyIcon,
@@ -9,34 +9,47 @@ import {
   MapPinIcon,
   FlagIcon,
   MagnifyingGlassIcon,
+  SparklesIcon,
+  BriefcaseIcon,
 } from "@heroicons/react/24/outline";
+import cities from "../../../src/data/cities.json";
 
 export default function Navbar() {
   const router = useRouter();
-  const [language, setLanguage] = useState("ગુજરાતી");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const searchParams = useSearchParams();
 
-  const categories = [
-    // { name: "All", icon: GlobeAltIcon },
-    { name: "My City", icon: MapPinIcon },
-    { name: "My Gujarat", icon: FlagIcon },
-    { name: "Cricket", icon: TrophyIcon },
-    { name: "Entertainment", icon: FilmIcon },
-    { name: "India", icon: FlagIcon },
-    { name: "Sport", icon: TrophyIcon },
-    { name: "World", icon: GlobeAltIcon },
-    { name: "Technology", icon: CpuChipIcon },
-  ];
+  /* ---------------- MOUNT FIX (IMPORTANT) ---------------- */
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const checkAuth = () => {
+    setMounted(true);
+  }, []);
+
+  /* ---------------- STATES ---------------- */
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showCityPopup, setShowCityPopup] = useState(false);
+  const [selectedCities, setSelectedCities] = useState([]);
+
+  const categories = [
+    { name: "મારું શહેર", icon: MapPinIcon },
+    { name: "મારું ગુજરાત", icon: FlagIcon },
+    { name: "ક્રિકેટ", icon: TrophyIcon },
+    { name: "મનોરંજન", icon: FilmIcon },
+    { name: "ભારત", icon: FlagIcon },
+    { name: "રમતગમત", icon: TrophyIcon },
+    { name: "વિશ્વ", icon: GlobeAltIcon },
+    { name: "ટેકનોલોજી", icon: CpuChipIcon },
+    { name: "લાઇફસ્ટાઇલ", icon: SparklesIcon },
+    { name: "વ્યવસાય", icon: BriefcaseIcon },
+  ];
+
+  /* ---------------- AUTH ---------------- */
+  useEffect(() => {
+    if (typeof window !== "undefined") {
       const token = localStorage.getItem("token");
       setIsLoggedIn(!!token);
-    };
-    checkAuth();
-    window.addEventListener("storage", checkAuth);
-    return () => window.removeEventListener("storage", checkAuth);
+    }
   }, []);
 
   const handleLogout = () => {
@@ -45,29 +58,62 @@ export default function Navbar() {
     router.push("/login");
   };
 
-  // ✅ Search handler — supports Gujarati Unicode
+  /* ---------------- SEARCH ---------------- */
+  useEffect(() => {
+    if (!mounted) return;
+
+    const urlSearch = searchParams.get("search");
+    if (urlSearch) {
+      setSearchQuery(urlSearch);
+    }
+  }, [mounted, searchParams]);
+
   const handleSearch = (e) => {
     e.preventDefault();
     const trimmed = searchQuery.trim();
-    if (trimmed) {
-      router.push(`/?search=${encodeURIComponent(trimmed)}`);
-    } else {
+
+    if (!trimmed) {
       router.push("/");
+      return;
     }
+
+    router.push(`/?search=${encodeURIComponent(trimmed)}`);
   };
 
-  // ✅ Category click handler
+  /* ---------------- CATEGORY CLICK ---------------- */
   const handleCategoryClick = (catName) => {
-    if (catName === "All") {
-      router.push("/");
-    } else {
-      router.push(`/?category=${encodeURIComponent(catName)}`);
+    if (catName === "મારું શહેર") {
+      setShowCityPopup(true);
+      return;
     }
+    router.push(`/?category=${encodeURIComponent(catName)}`);
   };
+
+  /* ---------------- CITY SELECT ---------------- */
+  const handleCitySelect = (cityName) => {
+    setSelectedCities((prev) =>
+      prev.includes(cityName)
+        ? prev.filter((c) => c !== cityName)
+        : [...prev, cityName],
+    );
+  };
+
+  /* ---------------- APPLY FILTER ---------------- */
+  const applyCityFilter = () => {
+    if (selectedCities.length > 0) {
+      router.push(`/?cities=${selectedCities.join(",")}`);
+    } else {
+      router.push("/");
+    }
+    setShowCityPopup(false);
+  };
+
+  /* ---------------- PREVENT HYDRATION MISMATCH ---------------- */
+  if (!mounted) return null;
 
   return (
     <header className="w-full">
-      {/* Top Navbar */}
+      {/* TOP NAVBAR */}
       <nav className="h-16 flex items-center justify-between px-6 bg-blue-900 text-white">
         <div
           className="flex items-center gap-2 cursor-pointer"
@@ -76,29 +122,12 @@ export default function Navbar() {
           <img
             src="/newslogo.jpeg"
             alt="Logo"
-            className="h-10 w-auto object-contain"
+            className="h-14 w-auto object-contain"
           />
-          <span className="font-bold text-xl">ગુજરાત TV</span>
+          <span className="font-bold text-xl">ગુજરાતી નેશનલ ટીવી ન્યૂઝ</span>
         </div>
 
-        {/* <div className="flex items-center gap-6">
-          <button onClick={() => router.push("/")}>Home</button>
-          <button onClick={() => router.push("/story-news")}>Story News</button>
-          <button onClick={() => router.push("/digital-news")}>
-            Digital News
-          </button>
-        </div> */}
-
         <div className="flex items-center gap-4">
-          <button
-            className="px-2 py-1 border border-white rounded hover:bg-white hover:text-blue-900 transition"
-            onClick={() =>
-              setLanguage(language === "ગુજરાતી" ? "English" : "ગુજરાતી")
-            }
-          >
-            {language}
-          </button>
-
           {isLoggedIn ? (
             <button
               onClick={handleLogout}
@@ -117,7 +146,8 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {/* Breaking News Strip */}
+      {/* BREAKING NEWS STRIP */}
+
       <div className="w-full bg-red-600 text-white h-8 overflow-hidden relative pt-1">
         <div className="absolute whitespace-nowrap animate-marquee flex items-center gap-8 px-80">
           <span>🔴 Latest Breaking News Updates</span>
@@ -126,18 +156,20 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Categories + Search Bar */}
-      <div className="bg-white shadow-md border-t">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          {/* Categories */}
-          <div className="flex items-center gap-4">
+      {/* CATEGORIES + SEARCH */}
+      <div className="bg-white shadow-sm border-t">
+        <div className="w-full px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex flex-wrap items-center gap-3">
             {categories.map((cat) => {
               const Icon = cat.icon;
               return (
                 <button
                   key={cat.name}
                   onClick={() => handleCategoryClick(cat.name)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-full bg-gray-100 hover:bg-blue-600 hover:text-white transition"
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium 
+                  bg-gray-100 text-gray-800 
+                  rounded-full whitespace-nowrap
+                  hover:bg-gray-200 transition"
                 >
                   <Icon className="w-4 h-4" />
                   {cat.name}
@@ -146,10 +178,9 @@ export default function Navbar() {
             })}
           </div>
 
-          {/* ✅ Search Bar — supports Gujarati input */}
           <form
             onSubmit={handleSearch}
-            className="flex items-center bg-gray-100 rounded-full px-4 py-1.5 w-64 focus-within:ring-2 focus-within:ring-blue-500 transition"
+            className="flex items-center bg-gray-100 rounded-full px-4 py-2 w-72 border"
           >
             <input
               type="text"
@@ -157,17 +188,61 @@ export default function Navbar() {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="શોધો... / Search..."
               className="bg-transparent outline-none w-full text-sm"
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck="false"
             />
-            <button type="submit" aria-label="Search">
-              <MagnifyingGlassIcon className="w-4 h-4 text-gray-500 hover:text-blue-600 transition" />
+            <button type="submit">
+              <MagnifyingGlassIcon className="w-5 h-5 text-gray-600" />
             </button>
           </form>
         </div>
       </div>
+
+      {/* CITY POPUP */}
+      {showCityPopup && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-white w-[90%] md:w-187.5 max-h-[85vh] rounded-2xl shadow-2xl p-6 flex flex-col">
+            <div className="flex justify-between mb-4 border-b pb-3">
+              <h2 className="text-xl font-semibold">Select Your Cities</h2>
+              <button onClick={() => setShowCityPopup(false)}>✕</button>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 overflow-y-auto max-h-[55vh]">
+              {cities.map((city) => {
+                const isSelected = selectedCities.includes(city.name);
+                return (
+                  <div
+                    key={city.id}
+                    onClick={() => handleCitySelect(city.name)}
+                    className={`cursor-pointer px-4 py-2 rounded-xl border text-sm font-medium text-center
+                    ${
+                      isSelected
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-gray-100 hover:bg-blue-100 border-gray-200"
+                    }`}
+                  >
+                    {city.name}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setSelectedCities([])}
+                className="flex-1 py-2 rounded-xl border"
+              >
+                Clear All
+              </button>
+
+              <button
+                onClick={applyCityFilter}
+                className="flex-1 py-2 rounded-xl bg-blue-600 text-white"
+              >
+                Apply Filter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
