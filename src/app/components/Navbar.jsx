@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   GlobeAltIcon,
@@ -14,7 +14,8 @@ import {
 } from "@heroicons/react/24/outline";
 import cities from "../../../src/data/cities.json";
 
-export default function Navbar() {
+// ─── Inner component that uses useSearchParams ───────────────────────────────
+function NavbarContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -147,7 +148,6 @@ export default function Navbar() {
       </nav>
 
       {/* BREAKING NEWS STRIP */}
-
       <div className="w-full bg-red-600 text-white h-8 overflow-hidden relative pt-1">
         <div className="absolute whitespace-nowrap animate-marquee flex items-center gap-8 px-80">
           <span>🔴 Latest Breaking News Updates</span>
@@ -166,9 +166,9 @@ export default function Navbar() {
                 <button
                   key={cat.name}
                   onClick={() => handleCategoryClick(cat.name)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium 
-                  bg-gray-100 text-gray-800 
-                  rounded-full whitespace-nowrap
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium
+                   bg-gray-100 text-gray-800
+                   rounded-full whitespace-nowrap
                   hover:bg-gray-200 transition"
                 >
                   <Icon className="w-4 h-4" />
@@ -213,11 +213,10 @@ export default function Navbar() {
                     key={city.id}
                     onClick={() => handleCitySelect(city.name)}
                     className={`cursor-pointer px-4 py-2 rounded-xl border text-sm font-medium text-center
-                    ${
-                      isSelected
+                    ${isSelected
                         ? "bg-blue-600 text-white border-blue-600"
                         : "bg-gray-100 hover:bg-blue-100 border-gray-200"
-                    }`}
+                      }`}
                   >
                     {city.name}
                   </div>
@@ -244,5 +243,22 @@ export default function Navbar() {
         </div>
       )}
     </header>
+  );
+}
+
+// ─── Exported component with Suspense wrapper ────────────────────────────────
+export default function Navbar() {
+  return (
+    <Suspense
+      fallback={
+        <header className="w-full">
+          <nav className="h-16 bg-blue-900" />
+          <div className="w-full bg-red-600 h-8" />
+          <div className="bg-white shadow-sm border-t h-14" />
+        </header>
+      }
+    >
+      <NavbarContent />
+    </Suspense>
   );
 }
