@@ -9,7 +9,7 @@ const BASE_URL =
 // ---------------- LOGIN ----------------
 export async function loginUser(username, password) {
   try {
-    const res = await fetch(`${BASE_URL}/auth/access`, {
+    const res = await fetch(`${BASE_URL}/api/auth/access`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -33,7 +33,7 @@ export async function loginUser(username, password) {
 // ---------------- HOMEPAGE NEWS ----------------
 export async function getHomePageNews() {
   try {
-    const res = await fetch(`${BASE_URL}/homepage`, {
+    const res = await fetch(`${BASE_URL}/api/homepage`, {
       cache: "no-store", // always fresh data
     });
 
