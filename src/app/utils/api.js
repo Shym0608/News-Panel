@@ -1,7 +1,10 @@
 // utils/cmnapi.js
 
 // ✅ Auto switch local / production
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+// const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  "https://gujarat-national-news-backend.onrender.com";
 
 // ---------------- LOGIN ----------------
 export async function loginUser(username, password) {
