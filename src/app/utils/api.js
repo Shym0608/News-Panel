@@ -53,7 +53,7 @@ export async function getHomePageNews() {
 // ---------------- STORY NEWS ----------------
 export async function fetchStoryNews() {
   try {
-    const res = await fetch(`${BASE_URL}/homepage/story`, {
+    const res = await fetch(`${BASE_URL}/api/homepage/story`, {
       cache: "no-store",
     });
 
@@ -71,7 +71,7 @@ export async function fetchStoryNews() {
 // ---------------- DIGITAL NEWS ----------------
 export async function fetchDigitalNews() {
   try {
-    const res = await fetch(`${BASE_URL}/homepage/digital`, {
+    const res = await fetch(`${BASE_URL}/api/homepage/digital`, {
       cache: "no-store",
     });
 
