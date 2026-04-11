@@ -434,11 +434,9 @@ function HomeContent() {
   const citiesQuery = searchParams.get("cities") || "";
 
   const isSearching = !!(searchQuery || categoryQuery || citiesQuery);
-
-  // Derived total for display
   const allNews = [...storyNews, ...digitalNews];
 
-  // ─── Fetch Ads ────────────────────────────────────────────────
+  // ─── Fetch Ads ─────────────────────────────────────────────────
   useEffect(() => {
     const fetchAds = async () => {
       try {
@@ -467,7 +465,7 @@ function HomeContent() {
     fetchAds();
   }, []);
 
-  // ─── Fetch News based on filters ──────────────────────────────
+  // ─── Fetch News based on filters ───────────────────────────────
   useEffect(() => {
     if (citiesQuery) {
       fetchNewsByCities(citiesQuery);
@@ -478,19 +476,35 @@ function HomeContent() {
     }
   }, [searchQuery, categoryQuery, citiesQuery]);
 
-  // ─── Default: fetch story + digital separately ─────────────────
+  // ─── Default: getHomePageNews as fallback + fetchStoryNews + fetchDigitalNews ───
   const fetchAllData = async () => {
     try {
       setLoading(true);
 
-      const [story, digital, slidingRes] = await Promise.all([
+      const [homeNews, story, digital, slidingRes] = await Promise.all([
+        getHomePageNews(),
         fetchStoryNews(),
         fetchDigitalNews(),
         fetch(`${API_BASE}/api/homepage/videos/sliding`),
       ]);
 
-      setStoryNews(Array.isArray(story) ? story : []);
-      setDigitalNews(Array.isArray(digital) ? digital : []);
+      // Use dedicated story/digital feeds; fallback to homeNews if empty
+      const storyItems =
+        Array.isArray(story) && story.length > 0
+          ? story
+          : Array.isArray(homeNews)
+            ? homeNews.filter((n) => n?.type !== "DIGITAL")
+            : [];
+
+      const digitalItems =
+        Array.isArray(digital) && digital.length > 0
+          ? digital
+          : Array.isArray(homeNews)
+            ? homeNews.filter((n) => n?.type === "DIGITAL")
+            : [];
+
+      setStoryNews(storyItems);
+      setDigitalNews(digitalItems);
 
       const sliding = await slidingRes.json();
       setSlidingVideos(Array.isArray(sliding) ? sliding : []);
@@ -504,7 +518,7 @@ function HomeContent() {
     }
   };
 
-  // ─── City filter ───────────────────────────────────────────────
+  // ─── City filter ────────────────────────────────────────────────
   const fetchNewsByCities = async (citiesString) => {
     try {
       setLoading(true);
@@ -531,7 +545,7 @@ function HomeContent() {
     }
   };
 
-  // ─── Search / Category filter ──────────────────────────────────
+  // ─── Search / Category filter ───────────────────────────────────
   const fetchFilteredNews = async (query, category) => {
     try {
       setLoading(true);
@@ -571,7 +585,7 @@ function HomeContent() {
 
   const clearSearch = () => router.push("/");
 
-  // ─── Render ────────────────────────────────────────────────────
+  // ─── Render ─────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-100 overflow-x-hidden">
       <div className="w-full px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
