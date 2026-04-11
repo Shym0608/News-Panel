@@ -481,35 +481,63 @@ function HomeContent() {
     try {
       setLoading(true);
 
-      const [homeNews, story, digital, slidingRes] = await Promise.all([
-        getHomePageNews(),
-        fetchStoryNews(),
-        fetchDigitalNews(),
-        fetch(`${API_BASE}/api/homepage/videos/sliding`),
-      ]);
+      // ✅ Use Promise.allSettled so one failure doesn't kill everything
+      const [homeResult, storyResult, digitalResult, slidingResult] =
+        await Promise.allSettled([
+          getHomePageNews(),
+          fetchStoryNews(),
+          fetchDigitalNews(),
+          fetch(`${API_BASE}/api/homepage/videos/sliding`).then((r) =>
+            r.json(),
+          ),
+        ]);
 
-      // Use dedicated story/digital feeds; fallback to homeNews if empty
+      const homeNews =
+        homeResult.status === "fulfilled" && Array.isArray(homeResult.value)
+          ? homeResult.value
+          : [];
+
+      const story =
+        storyResult.status === "fulfilled" && Array.isArray(storyResult.value)
+          ? storyResult.value
+          : [];
+
+      const digital =
+        digitalResult.status === "fulfilled" &&
+        Array.isArray(digitalResult.value)
+          ? digitalResult.value
+          : [];
+
+      const sliding =
+        slidingResult.status === "fulfilled" &&
+        Array.isArray(slidingResult.value)
+          ? slidingResult.value
+          : [];
+
+      // ✅ Fallback to homeNews if story/digital endpoints return empty
       const storyItems =
-        Array.isArray(story) && story.length > 0
+        story.length > 0
           ? story
-          : Array.isArray(homeNews)
-            ? homeNews.filter((n) => n?.type !== "DIGITAL")
-            : [];
+          : homeNews.filter((n) => n?.type !== "DIGITAL");
 
       const digitalItems =
-        Array.isArray(digital) && digital.length > 0
+        digital.length > 0
           ? digital
-          : Array.isArray(homeNews)
-            ? homeNews.filter((n) => n?.type === "DIGITAL")
-            : [];
+          : homeNews.filter((n) => n?.type === "DIGITAL");
 
       setStoryNews(storyItems);
       setDigitalNews(digitalItems);
+      setSlidingVideos(sliding);
 
-      const sliding = await slidingRes.json();
-      setSlidingVideos(Array.isArray(sliding) ? sliding : []);
+      // ✅ Log which APIs failed so you can debug easily
+      if (storyResult.status === "rejected")
+        console.warn("Story API failed:", storyResult.reason);
+      if (digitalResult.status === "rejected")
+        console.warn("Digital API failed:", digitalResult.reason);
+      if (homeResult.status === "rejected")
+        console.warn("Homepage API failed:", homeResult.reason);
     } catch (error) {
-      console.error("Error fetching homepage data:", error);
+      console.error("Critical fetch error:", error);
       setStoryNews([]);
       setDigitalNews([]);
       setSlidingVideos([]);
@@ -517,6 +545,46 @@ function HomeContent() {
       setLoading(false);
     }
   };
+  // const fetchAllData = async () => {
+  //   try {
+  //     setLoading(true);
+
+  //     const [homeNews, story, digital, slidingRes] = await Promise.all([
+  //       getHomePageNews(),
+  //       fetchStoryNews(),
+  //       fetchDigitalNews(),
+  //       fetch(`${API_BASE}/api/homepage/videos/sliding`),
+  //     ]);
+
+  //     // Use dedicated story/digital feeds; fallback to homeNews if empty
+  //     const storyItems =
+  //       Array.isArray(story) && story.length > 0
+  //         ? story
+  //         : Array.isArray(homeNews)
+  //           ? homeNews.filter((n) => n?.type !== "DIGITAL")
+  //           : [];
+
+  //     const digitalItems =
+  //       Array.isArray(digital) && digital.length > 0
+  //         ? digital
+  //         : Array.isArray(homeNews)
+  //           ? homeNews.filter((n) => n?.type === "DIGITAL")
+  //           : [];
+
+  //     setStoryNews(storyItems);
+  //     setDigitalNews(digitalItems);
+
+  //     const sliding = await slidingRes.json();
+  //     setSlidingVideos(Array.isArray(sliding) ? sliding : []);
+  //   } catch (error) {
+  //     console.error("Error fetching homepage data:", error);
+  //     setStoryNews([]);
+  //     setDigitalNews([]);
+  //     setSlidingVideos([]);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   // ─── City filter ────────────────────────────────────────────────
   const fetchNewsByCities = async (citiesString) => {
