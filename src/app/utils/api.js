@@ -6,7 +6,6 @@ const BASE_URL =
 
 // ✅ Safety check — log in dev to confirm it's correct
 if (typeof window !== "undefined") {
-  console.log("API BASE_URL:", BASE_URL);
 }
 
 // ---------------- LOGIN ----------------
